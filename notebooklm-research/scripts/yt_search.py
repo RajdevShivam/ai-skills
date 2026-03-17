@@ -24,13 +24,14 @@ NICHE_BOOST_TERMS = "practitioner strategy deep dive advanced"
 
 def search_youtube(query: str, count: int) -> list[dict]:
     cmd = [
-        "yt-dlp",
+        sys.executable, "-m", "yt_dlp",
         "--dump-json",
         "--no-download",
-        "--flat-playlist",
+        "--no-update",
+        "--extractor-args", "youtube:player_client=default",
         f"ytsearch{count}:{query}",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
     if result.returncode != 0:
         print(f"yt-dlp error: {result.stderr}", file=sys.stderr)
         sys.exit(1)
@@ -49,12 +50,14 @@ def search_youtube(query: str, count: int) -> list[dict]:
 def get_video_details(url: str) -> dict | None:
     """Fetch full video metadata including captions and upload date."""
     cmd = [
-        "yt-dlp",
+        sys.executable, "-m", "yt_dlp",
         "--dump-json",
         "--no-download",
+        "--no-update",
+        "--extractor-args", "youtube:player_client=default",
         url,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
     if result.returncode != 0:
         return None
     try:
@@ -105,7 +108,11 @@ def main():
     filtered = []
 
     for video in search_results:
-        url = video.get("url") or video.get("webpage_url") or f"https://www.youtube.com/watch?v={video.get('id', '')}"
+        # Always prefer webpage_url or construct from id — never use 'url' which may be an HLS manifest
+        video_id = video.get("id", "")
+        url = video.get("webpage_url") or (f"https://www.youtube.com/watch?v={video_id}" if video_id else None)
+        if not url:
+            continue
         title = video.get("title", "Unknown")
 
         # Fetch full details for caption check and accurate metadata

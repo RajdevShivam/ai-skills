@@ -4,6 +4,7 @@ Setup check for notebooklm-research skill.
 Verifies: notebooklm-py installed, yt-dlp installed, NotebookLM auth valid.
 """
 
+import os
 import subprocess
 import sys
 
@@ -16,71 +17,72 @@ def check_package(package: str) -> bool:
         return False
 
 
-def check_command(cmd: str) -> bool:
+def check_python_module(module: str) -> bool:
+    """Check if a Python module is importable."""
     try:
         result = subprocess.run(
-            [cmd, "--version"],
+            [sys.executable, "-c", f"import {module}"],
             capture_output=True,
-            text=True,
             timeout=10,
         )
         return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
         return False
 
 
 def check_notebooklm_auth() -> tuple[bool, str]:
+    """Check auth by inspecting the storage file directly.
+    Avoids notebooklm auth check command which crashes on Windows due to Unicode rendering."""
+    import json
+    storage_path = os.path.expanduser("~/.notebooklm/storage_state.json")
+    if not os.path.exists(storage_path):
+        return False, "No storage_state.json found. Run: python -m notebooklm login"
     try:
-        result = subprocess.run(
-            ["notebooklm", "auth", "check"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode == 0:
-            return True, "authenticated"
-        return False, result.stderr.strip() or result.stdout.strip()
-    except FileNotFoundError:
-        return False, "notebooklm command not found — is notebooklm-py installed?"
-    except subprocess.TimeoutExpired:
-        return False, "auth check timed out"
+        with open(storage_path) as f:
+            data = json.load(f)
+        cookies = data.get("cookies", [])
+        key_names = {c["name"] for c in cookies}
+        required = {"SID", "SAPISID"}
+        missing = required - key_names
+        if missing:
+            return False, f"Auth cookies missing: {missing}. Re-run: python -m notebooklm login"
+        return True, f"authenticated ({len(cookies)} cookies)"
+    except Exception as e:
+        return False, f"Could not read storage file: {e}"
 
 
 def main():
     errors = []
-    warnings = []
 
-    # Check notebooklm-py
-    if not check_command("notebooklm"):
-        errors.append(
-            "notebooklm-py not installed. Fix: pip install notebooklm-py"
-        )
+    # Check notebooklm-py (importable as 'notebooklm')
+    if not check_python_module("notebooklm"):
+        errors.append("notebooklm-py not installed. Fix: pip install notebooklm-py")
     else:
-        print("✓ notebooklm-py installed")
+        print("[OK] notebooklm-py installed")
 
-    # Check yt-dlp
-    if not check_command("yt-dlp"):
+    # Check yt-dlp (importable as 'yt_dlp')
+    if not check_python_module("yt_dlp"):
         errors.append("yt-dlp not installed. Fix: pip install yt-dlp")
     else:
-        print("✓ yt-dlp installed")
+        print("[OK] yt-dlp installed")
 
     # If core tools missing, stop here
     if errors:
-        print("\n❌ Setup incomplete:")
+        print("\n[FAIL] Setup incomplete:")
         for e in errors:
-            print(f"  • {e}")
+            print(f"  - {e}")
         sys.exit(1)
 
     # Check NotebookLM auth
     auth_ok, auth_msg = check_notebooklm_auth()
     if auth_ok:
-        print("✓ NotebookLM auth valid")
+        print("[OK] NotebookLM auth valid")
     else:
-        print(f"\n❌ NotebookLM auth failed: {auth_msg}")
-        print("  Fix: run `notebooklm login` and complete browser authentication")
+        print(f"\n[FAIL] NotebookLM auth failed: {auth_msg}")
+        print("  Fix: run `python -m notebooklm login` and complete browser authentication")
         sys.exit(1)
 
-    print("\n✅ All checks passed. Ready to run notebooklm-research.")
+    print("\n[OK] All checks passed. Ready to run notebooklm-research.")
 
 
 if __name__ == "__main__":
