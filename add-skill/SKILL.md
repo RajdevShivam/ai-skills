@@ -69,10 +69,17 @@ ls <skills-root>
 
 Tell the user: "Skill `<name>` created and pushed. Pull on other machines with `cd ~/ai-skills && git pull`."
 
-## VPS Setup (first time)
+## New Machine Setup (Linux/VPS)
 
-If the VPS doesn't have the skills repo yet, run on the VPS:
+If the machine doesn't have the skills repo yet:
 ```bash
 git clone https://github.com/RajdevShivam/ai-skills.git ~/ai-skills
-ln -sf ~/ai-skills ~/.claude/skills
+bash ~/ai-skills/setup.sh
+```
+
+`setup.sh` symlinks each skill folder individually into `~/.claude/skills/`, preserving any plugin-managed skills already there (e.g. Superpowers GWS skills).
+
+After adding a new skill on any machine, on other machines run:
+```bash
+cd ~/ai-skills && git pull && bash setup.sh
 ```
