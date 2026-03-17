@@ -107,7 +107,7 @@ def main():
     kept = []
     filtered = []
 
-    for video in search_results:
+    for i, video in enumerate(search_results):
         # Always prefer webpage_url or construct from id — never use 'url' which may be an HLS manifest
         video_id = video.get("id", "")
         url = video.get("webpage_url") or (f"https://www.youtube.com/watch?v={video_id}" if video_id else None)
@@ -116,6 +116,7 @@ def main():
         title = video.get("title", "Unknown")
 
         # Fetch full details for caption check and accurate metadata
+        print(f"  [{i+1}/{len(search_results)}] Fetching details: {title[:60]}...", file=sys.stderr)
         details = get_video_details(url)
         if not details:
             filtered.append({"url": url, "title": title, "reason": "Could not fetch video details"})
