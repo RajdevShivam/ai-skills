@@ -62,21 +62,28 @@ The user will provide some combination of:
 
 ## Step 2: YouTube Search (if topic provided)
 
-Use yt-dlp to find relevant YouTube videos:
+Use yt-dlp to find relevant YouTube videos. For niche topics (anything technical, strategy-focused, or practitioner-level), always use `--niche` — it appends practitioner/deep-dive terms to the query to steer YouTube's algorithm away from beginner explainers toward people who actually do the thing:
 
 ```bash
-python "C:/Users/shiva/ai-skills/notebooklm-research/scripts/yt_search.py" "<search query>" --count 5
+# For niche/technical topics (default for most research queries):
+python "C:/Users/shiva/ai-skills/notebooklm-research/scripts/yt_search.py" "<search query>" --niche --count 15
+
+# For broad/general topics where mainstream coverage is fine:
+python "C:/Users/shiva/ai-skills/notebooklm-research/scripts/yt_search.py" "<search query>" --count 15
 ```
 
-This returns a JSON list of `{url, title, duration_seconds, view_count, age_days}`.
+This returns a JSON list of `{url, title, duration_seconds, view_count, age_days, has_captions, notebooklm_ready}`.
 
-**Filter before adding to NotebookLM:**
-- Drop videos under 72 hours old (NotebookLM requirement)
-- Drop videos without captions (yt-dlp flags this: `automatic_captions` empty AND `subtitles` empty)
-- Prefer videos > 5 minutes (more substance)
-- Cap at 5 YouTube sources — quality over quantity
+**Hard filters (applied in script — videos excluded entirely):**
+- No captions available
+- Under 5 minutes (too shallow to be useful)
 
-Tell the user which videos were found and which were filtered, before proceeding.
+**Soft flag — `notebooklm_ready: false`:**
+- Videos under 72 hours old are flagged but still returned. NotebookLM may fail to import their transcript — attempt them anyway and skip gracefully if they fail. Don't exclude relevant recent content just because it might fail.
+
+**Cap at 5 YouTube sources** — quality over quantity.
+
+Tell the user which videos were found, and flag any with `notebooklm_ready: false` so they know a retry might be needed.
 
 ---
 

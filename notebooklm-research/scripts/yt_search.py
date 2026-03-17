@@ -4,10 +4,12 @@ YouTube search via yt-dlp for notebooklm-research skill.
 Returns filtered video metadata as JSON.
 
 Usage:
-    python yt_search.py "<query>" [--count N] [--min-age-days N] [--min-duration-secs N]
+    python yt_search.py "<query>" [--count N] [--niche] [--min-duration-secs N]
 
-Output: JSON list of {url, title, duration_seconds, view_count, age_days, has_captions}
-Filtered videos are excluded. Pass --show-filtered to see what was dropped.
+Output: JSON list of {url, title, duration_seconds, view_count, age_days, has_captions, notebooklm_ready}
+  - notebooklm_ready: False if video is <72 hours old (NotebookLM limitation), but video is still returned
+  - Hard filters: no captions, duration too short
+  - Pass --show-filtered to see what was hard-excluded
 """
 
 import argparse
@@ -15,6 +17,10 @@ import json
 import subprocess
 import sys
 from datetime import datetime, timezone
+
+# Words appended to query in --niche mode to steer away from beginner explainers
+# toward practitioners, researchers, and deep specialists
+NICHE_BOOST_TERMS = "practitioner strategy deep dive advanced"
 
 
 def search_youtube(query: str, count: int) -> list[dict]:
@@ -81,16 +87,17 @@ def has_captions(video_data: dict) -> bool:
 def main():
     parser = argparse.ArgumentParser(description="YouTube search for notebooklm-research")
     parser.add_argument("query", help="Search query")
-    parser.add_argument("--count", type=int, default=10, help="Number of results to fetch (pre-filter)")
-    parser.add_argument("--min-age-days", type=int, default=3, help="Minimum video age in days (default: 3 = 72 hours)")
+    parser.add_argument("--count", type=int, default=15, help="Number of results to fetch (pre-filter)")
+    parser.add_argument("--niche", action="store_true", help="Append practitioner/deep-dive terms to steer away from beginner content")
     parser.add_argument("--min-duration-secs", type=int, default=300, help="Minimum duration in seconds (default: 300 = 5 min)")
     parser.add_argument("--max-results", type=int, default=5, help="Max results to return after filtering")
-    parser.add_argument("--show-filtered", action="store_true", help="Also output filtered videos with reason")
+    parser.add_argument("--show-filtered", action="store_true", help="Also output hard-excluded videos with reason")
     args = parser.parse_args()
 
-    print(f"Searching YouTube: '{args.query}' (fetching {args.count} candidates)...", file=sys.stderr)
+    search_query = f"{args.query} {NICHE_BOOST_TERMS}" if args.niche else args.query
+    print(f"Searching YouTube: '{search_query}' (fetching {args.count} candidates)...", file=sys.stderr)
 
-    search_results = search_youtube(args.query, args.count)
+    search_results = search_youtube(search_query, args.count)
     if not search_results:
         print(json.dumps({"results": [], "filtered": [], "error": "No results from yt-dlp"}))
         return
@@ -114,11 +121,7 @@ def main():
         view_count = details.get("view_count", 0) or 0
         captions = has_captions(details)
 
-        # Filter checks
-        if age_days is not None and age_days < args.min_age_days:
-            filtered.append({"url": url, "title": title, "reason": f"Too recent ({age_days} days old, need {args.min_age_days}+)"})
-            continue
-
+        # Hard filters: these videos cannot be used at all
         if duration < args.min_duration_secs:
             filtered.append({"url": url, "title": title, "reason": f"Too short ({duration}s, need {args.min_duration_secs}+s)"})
             continue
@@ -127,6 +130,10 @@ def main():
             filtered.append({"url": url, "title": title, "reason": "No captions available"})
             continue
 
+        # Soft flag: <72 hours old means NotebookLM may fail to import transcript.
+        # Still include the video — the skill will warn and attempt it anyway.
+        notebooklm_ready = age_days is None or age_days >= 3
+
         kept.append({
             "url": url,
             "title": title,
@@ -134,6 +141,7 @@ def main():
             "view_count": view_count,
             "age_days": age_days,
             "has_captions": captions,
+            "notebooklm_ready": notebooklm_ready,
         })
 
         if len(kept) >= args.max_results:
@@ -144,7 +152,9 @@ def main():
         output["filtered"] = filtered
 
     print(json.dumps(output, indent=2))
-    print(f"\nFound {len(kept)} usable videos, filtered {len(filtered)}.", file=sys.stderr)
+
+    not_ready = [v for v in kept if not v["notebooklm_ready"]]
+    print(f"\nFound {len(kept)} usable videos ({len(not_ready)} may fail NotebookLM import — too recent), hard-excluded {len(filtered)}.", file=sys.stderr)
 
 
 if __name__ == "__main__":
