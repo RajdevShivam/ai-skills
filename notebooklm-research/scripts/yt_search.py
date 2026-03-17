@@ -6,8 +6,7 @@ Returns filtered video metadata as JSON.
 Usage:
     python yt_search.py "<query>" [--count N] [--niche] [--min-duration-secs N]
 
-Output: JSON list of {url, title, duration_seconds, view_count, age_days, has_captions, notebooklm_ready}
-  - notebooklm_ready: False if video is <72 hours old (NotebookLM limitation), but video is still returned
+Output: JSON list of {url, title, duration_seconds, view_count, age_days, has_captions}
   - Hard filters: no captions, duration too short
   - Pass --show-filtered to see what was hard-excluded
 """
@@ -130,10 +129,6 @@ def main():
             filtered.append({"url": url, "title": title, "reason": "No captions available"})
             continue
 
-        # Soft flag: <72 hours old means NotebookLM may fail to import transcript.
-        # Still include the video — the skill will warn and attempt it anyway.
-        notebooklm_ready = age_days is None or age_days >= 3
-
         kept.append({
             "url": url,
             "title": title,
@@ -141,7 +136,6 @@ def main():
             "view_count": view_count,
             "age_days": age_days,
             "has_captions": captions,
-            "notebooklm_ready": notebooklm_ready,
         })
 
         if len(kept) >= args.max_results:
@@ -152,9 +146,7 @@ def main():
         output["filtered"] = filtered
 
     print(json.dumps(output, indent=2))
-
-    not_ready = [v for v in kept if not v["notebooklm_ready"]]
-    print(f"\nFound {len(kept)} usable videos ({len(not_ready)} may fail NotebookLM import — too recent), hard-excluded {len(filtered)}.", file=sys.stderr)
+    print(f"\nFound {len(kept)} usable videos, hard-excluded {len(filtered)}.", file=sys.stderr)
 
 
 if __name__ == "__main__":

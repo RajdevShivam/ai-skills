@@ -78,12 +78,9 @@ This returns a JSON list of `{url, title, duration_seconds, view_count, age_days
 - No captions available
 - Under 5 minutes (too shallow to be useful)
 
-**Soft flag — `notebooklm_ready: false`:**
-- Videos under 72 hours old are flagged but still returned. NotebookLM may fail to import their transcript — attempt them anyway and skip gracefully if they fail. Don't exclude relevant recent content just because it might fail.
-
 **Cap at 5 YouTube sources** — quality over quantity.
 
-Tell the user which videos were found, and flag any with `notebooklm_ready: false` so they know a retry might be needed.
+Tell the user which videos were found and which were excluded.
 
 ---
 
